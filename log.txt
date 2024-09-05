@@ -1,0 +1,339 @@
+/usr/local/lib/python3.10/site-packages/pytest_asyncio/plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-8.3.2, pluggy-1.5.0 -- /usr/local/bin/python3.10
+cachedir: .pytest_cache
+rootdir: /root/flash-attention/paged_attention/xf_flash_attention_cutlass
+plugins: anyio-4.4.0, asyncio-0.24.0
+asyncio: mode=strict, default_loop_scope=None
+collecting ... INFO: Please install gptq_kernels if you want to infer gptq model.
+
+collected 1 item
+
+test.py::test_flash_attn_output[0.0-0.0-128-128-128-True-False-False-False-mha-dtype0-False] 
+out: torch.Size([1, 128, 1, 128]) tensor([[[[ 0.6362, -0.1791, -0.1234,  ..., -0.0449,  0.3452, -0.0757]],
+
+         [[ 0.6201, -0.1675, -0.1147,  ..., -0.0403,  0.3345, -0.0637]],
+
+         [[ 0.3860, -0.0996, -0.0356,  ..., -0.2620,  0.1119, -0.0314]],
+
+         ...,
+
+         [[ 0.0205, -0.0103, -0.0170,  ..., -0.0128, -0.0171, -0.0105]],
+
+         [[-0.0041, -0.0720, -0.0147,  ..., -0.0139,  0.0928, -0.0161]],
+
+         [[ 0.0226, -0.0665, -0.0394,  ..., -0.0205,  0.0768, -0.0040]]]],
+       device='cuda:0', dtype=torch.float16)
+out_ref: torch.Size([1, 128, 1, 128]) tensor([[[[ 2.5449, -0.7163, -0.4934,  ..., -0.1797,  1.3809, -0.3030]],
+
+         [[ 2.4824, -0.6699, -0.4592,  ..., -0.1610,  1.3389, -0.2551]],
+
+         [[ 1.5449, -0.3987, -0.1426,  ..., -1.0488,  0.4475, -0.1257]],
+
+         ...,
+
+         [[ 0.0823, -0.0414, -0.0682,  ..., -0.0514, -0.0684, -0.0422]],
+
+         [[-0.0164, -0.2881, -0.0588,  ..., -0.0555,  0.3716, -0.0643]],
+
+         [[ 0.0906, -0.2661, -0.1577,  ..., -0.0818,  0.3076, -0.0161]]]],
+       device='cuda:0', dtype=torch.float16, grad_fn=<ToCopyBackward0>)
+Output max diff: 2.75
+Output mean diff: 0.1451416015625
+Pytorch max diff: 0.001953125
+Pytorch mean diff: 6.967782974243164e-05
+FAILED
+
+=================================== FAILURES ===================================
+_ test_flash_attn_output[0.0-0.0-128-128-128-True-False-False-False-mha-dtype0-False] _
+
+seqlen_q = 128, seqlen_k = 128, d = 128, dropout_p = 0.0, causal = True
+local = False, alibi = False, deterministic = False, mha_type = 'mha'
+dtype = torch.float16, kvpacked = False, softcap = 0.0
+
+    @pytest.mark.parametrize("kvpacked", [False])
+    # @pytest.mark.parametrize("dtype", ([torch.float16] if is_sm75 else [torch.float16, torch.bfloat16]))
+    @pytest.mark.parametrize("dtype", [torch.float16])
+    # @pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
+    @pytest.mark.parametrize("mha_type", ["mha"])
+    # @pytest.mark.parametrize("deterministic", [False, True])
+    @pytest.mark.parametrize("deterministic", [False])
+    # @pytest.mark.parametrize("alibi", [False, True])
+    @pytest.mark.parametrize("alibi", [False])
+    # @pytest.mark.parametrize("local", [False, True])
+    @pytest.mark.parametrize("local", [False])
+    # @pytest.mark.parametrize("causal", [False, True])
+    @pytest.mark.parametrize("causal", [True])
+    # @pytest.mark.parametrize("d", [32, 40, 59, 64, 96, 111, 128, 160, 192, 224, 256])
+    # @pytest.mark.parametrize("d", [32, 64, 96, 128, 160, 192, 224, 256])
+    # @pytest.mark.parametrize('d', [32, 40, 64, 80, 96, 128, 160, 192])
+    # @pytest.mark.parametrize('d', [32, 64, 96, 128, 160, 192])
+    # @pytest.mark.parametrize('d', [56, 80])
+    @pytest.mark.parametrize("d", [128])
+    # @pytest.mark.parametrize(
+    #     "seqlen_q,seqlen_k",
+    #     [
+    #         (113, 203),
+    #         (128, 217),
+    #         (113, 211),
+    #         (108, 256),
+    #         (256, 512),
+    #         (512, 256),
+    #         (1024, 1024),
+    #         (1023, 1024),
+    #         (1024, 1023),
+    #         (2048, 2048),
+    #     ],
+    # )
+    @pytest.mark.parametrize('seqlen_q,seqlen_k', [(128, 128)])
+    # @pytest.mark.parametrize("dropout_p", [0.0, 0.17])
+    @pytest.mark.parametrize("dropout_p", [0.0])
+    # @pytest.mark.parametrize("softcap", [0.0, 50.0])
+    @pytest.mark.parametrize("softcap", [0.0])
+    def test_flash_attn_output(
+        seqlen_q, seqlen_k, d, dropout_p, causal, local, alibi, deterministic, mha_type, dtype, kvpacked, softcap
+    ):
+        if (
+            max(seqlen_q, seqlen_k) >= 2048
+            and torch.cuda.get_device_properties("cuda").total_memory <= 16 * 2**30
+        ):
+            pytest.skip()  # Reference implementation OOM
+        if softcap > 0.0 and dropout_p > 0.0:
+            pytest.skip("Softcap and dropout not supported together")
+        device = "cuda"
+        # set seed
+        torch.random.manual_seed(0)
+        batch_size = 1
+        nheads = 1 if softcap == 0.0 else 4  # softcap reference impl takes more memory
+        nheads_k = nheads if mha_type == "mha" else (1 if mha_type == "mqa" else 2)
+        assert nheads % nheads_k == 0
+        window_size = (-1, -1) if not local else torch.randint(0, seqlen_k, (2,))
+        q = torch.randn(batch_size, seqlen_q, nheads, d, device=device, dtype=dtype, requires_grad=True)
+        if softcap > 0:
+            # Ensure the values of qk are at least within softcap range.
+            q = q * softcap
+        if kvpacked:
+            kv = torch.randn(
+                batch_size, seqlen_k, 2, nheads_k, d, device=device, dtype=dtype, requires_grad=True
+            )
+        else:
+            k = torch.randn(
+                batch_size, seqlen_k, nheads_k, d, device=device, dtype=dtype, requires_grad=True
+            )
+            v = torch.randn(
+                batch_size, seqlen_k, nheads_k, d, device=device, dtype=dtype, requires_grad=True
+            )
+        if alibi:
+            alibi_slopes = torch.rand(batch_size, nheads, device=device, dtype=torch.float32) * 0.3
+            attn_bias = attn_bias_from_alibi_slopes(alibi_slopes, seqlen_q, seqlen_k, causal=causal)
+        else:
+            alibi_slopes, attn_bias = None, None
+    
+        if kvpacked:
+            out, lse, S_dmask = flash_attn_kvpacked_func(
+                q,
+                kv,
+                dropout_p,
+                causal=causal,
+                window_size=window_size,
+                softcap=softcap,
+                alibi_slopes=alibi_slopes,
+                deterministic=deterministic,
+                return_attn_probs=True,
+            )
+        else:
+            # print("q:", q);
+            # print("k:", k);
+            # print("v:", v);
+            out, lse, S_dmask = flash_attn_func(
+                q,
+                k,
+                v,
+                dropout_p,
+                causal=causal,
+                window_size=window_size,
+                softcap=softcap,
+                alibi_slopes=alibi_slopes,
+                deterministic=deterministic,
+                return_attn_probs=True,
+            )
+        if dropout_p > 0.0:
+            S_dmask_converted = convert_flash_attn_S_to_softmax(
+                S_dmask,
+                seqlen_q,
+                seqlen_k,
+                None,
+                None,
+                d,
+                dropout_p > 0.0,
+                causal=causal,
+                window_size=window_size,
+            )
+            dropout_mask = S_dmask_converted >= 0
+            attn_unnorm = S_dmask_converted.abs()
+            if kvpacked:
+                kv_rep = repeat(kv, "b s two h d -> b s two (h g) d", g=nheads // nheads_k)
+                k_rep, v_rep = kv_rep.unbind(dim=2)
+            else:
+                k_rep = repeat(k, "b s h d -> b s (h g) d", g=nheads // nheads_k)
+                v_rep = repeat(v, "b s h d -> b s (h g) d", g=nheads // nheads_k)
+            attn = normalize_flash_attn_S(
+                attn_unnorm,
+                q,
+                k_rep,
+                v_rep,
+                None,
+                None,
+                attn_bias,
+                dropout_p > 0.0,
+                causal=causal,
+                window_size=window_size,
+            )
+            dropout_fraction = get_dropout_fraction(
+                dropout_mask, None, None, causal=causal, window_size=window_size
+            ).item()
+            print(f"Actual dropout fraction: {dropout_fraction}")
+        else:
+            dropout_mask = None
+    
+        if kvpacked:
+            out_ref, attn_ref = attention_kvpacked_ref(
+                q,
+                kv,
+                None,
+                None,
+                attn_bias,
+                dropout_p,
+                dropout_mask,
+                causal=causal,
+                window_size=window_size,
+                softcap=softcap,
+            )
+            out_pt, attn_pt = attention_kvpacked_ref(
+                q,
+                kv,
+                None,
+                None,
+                attn_bias,
+                dropout_p,
+                dropout_mask,
+                causal=causal,
+                window_size=window_size,
+                softcap=softcap,
+                upcast=False,
+                reorder_ops=True,
+            )
+        else:
+            out_ref, attn_ref = attention_ref(
+                q,
+                k,
+                v,
+                None,
+                None,
+                attn_bias,
+                dropout_p,
+                dropout_mask,
+                causal=causal,
+                window_size=window_size,
+                softcap=softcap,
+            )
+            out_pt, attn_pt = attention_ref(
+                q,
+                k,
+                v,
+                None,
+                None,
+                attn_bias,
+                dropout_p,
+                dropout_mask,
+                causal=causal,
+                window_size=window_size,
+                softcap=softcap,
+                upcast=False,
+                reorder_ops=True,
+            )
+    
+        print("out:", out.shape, out)
+        print("out_ref:", out_ref.shape, out_ref)
+        print(f"Output max diff: {(out - out_ref).abs().max().item()}")
+        print(f"Output mean diff: {(out - out_ref).abs().mean().item()}")
+        print(f"Pytorch max diff: {(out_pt - out_ref).abs().max().item()}")
+        print(f"Pytorch mean diff: {(out_pt - out_ref).abs().mean().item()}")
+        '''
+        if dropout_p > 0.0:
+            print(f"Attention max diff: {(attn - attn_ref).abs().max().item()}")
+            print(f"Attention Pytorch max diff: {(attn_pt - attn_ref).abs().max().item()}")
+    
+        g = torch.randn_like(out)
+        do_o = (g.float() * out.float()).sum(-1)
+        if (d <= MAX_HEADDIM_SM8x or dropout_p == 0) or (is_sm80 or is_sm90):
+            if kvpacked:
+                (
+                    dq,
+                    dkv,
+                ) = torch.autograd.grad(out, (q, kv), g)
+                dk, dv = dkv.unbind(2)
+                (
+                    dq_ref,
+                    dkv_ref,
+                ) = torch.autograd.grad(out_ref, (q, kv), g)
+                dk_ref, dv_ref = dkv_ref.unbind(2)
+                (
+                    dq_pt,
+                    dkv_pt,
+                ) = torch.autograd.grad(out_pt, (q, kv), g)
+                dk_pt, dv_pt = dkv_pt.unbind(2)
+            else:
+                (
+                    dq,
+                    dk,
+                    dv,
+                ) = torch.autograd.grad(out, (q, k, v), g)
+                (
+                    dq_ref,
+                    dk_ref,
+                    dv_ref,
+                ) = torch.autograd.grad(out_ref, (q, k, v), g)
+                (
+                    dq_pt,
+                    dk_pt,
+                    dv_pt,
+                ) = torch.autograd.grad(out_pt, (q, k, v), g)
+            print(f"dQ max diff: {(dq - dq_ref).abs().max().item()}")
+            print(f"dK max diff: {(dk - dk_ref).abs().max().item()}")
+            print(f"dV max diff: {(dv - dv_ref).abs().max().item()}")
+            print(f"dQ mean diff: {(dq - dq_ref).abs().mean().item()}")
+            print(f"dK mean diff: {(dk - dk_ref).abs().mean().item()}")
+            print(f"dV mean diff: {(dv - dv_ref).abs().mean().item()}")
+            print(f"dQ Pytorch max diff: {(dq_pt - dq_ref).abs().max().item()}")
+            print(f"dK Pytorch max diff: {(dk_pt - dk_ref).abs().max().item()}")
+            print(f"dV Pytorch max diff: {(dv_pt - dv_ref).abs().max().item()}")
+            print(f"dQ Pytorch mean diff: {(dq_pt - dq_ref).abs().mean().item()}")
+            print(f"dK Pytorch mean diff: {(dk_pt - dk_ref).abs().mean().item()}")
+            print(f"dV Pytorch mean diff: {(dv_pt - dv_ref).abs().mean().item()}")
+        '''
+        # Check that FlashAttention's numerical error is at most twice the numerical error
+        # of a Pytorch implementation.
+>       assert (out - out_ref).abs().max().item() <= 2 * (out_pt - out_ref).abs().max().item()
+E       AssertionError: assert 2.75 <= (2 * 0.001953125)
+E        +  where 2.75 = <built-in method item of Tensor object at 0x7f4793a66890>()
+E        +    where <built-in method item of Tensor object at 0x7f4793a66890> = tensor(2.7500, device='cuda:0', dtype=torch.float16, grad_fn=<MaxBackward1>).item
+E        +      where tensor(2.7500, device='cuda:0', dtype=torch.float16, grad_fn=<MaxBackward1>) = <built-in method max of Tensor object at 0x7f4793a66b10>()
+E        +        where <built-in method max of Tensor object at 0x7f4793a66b10> = tensor([[[[1.9082, 0.5371, 0.3701,  ..., 0.1348, 1.0352, 0.2273]],\n\n         [[1.8623, 0.5024, 0.3445,  ..., 0.1207, 1.0039, 0.1914]],\n\n         [[1.1592, 0.2991, 0.1069,  ..., 0.7871, 0.3357, 0.0943]],\n\n         ...,\n\n         [[0.0617, 0.0311, 0.0511,  ..., 0.0385, 0.0513, 0.0317]],\n\n         [[0.0123, 0.2161, 0.0441,  ..., 0.0416, 0.2788, 0.0482]],\n\n         [[0.0679, 0.1996, 0.1183,  ..., 0.0614, 0.2307, 0.0120]]]],\n       device='cuda:0', dtype=torch.float16, grad_fn=<AbsBackward0>).max
+E        +          where tensor([[[[1.9082, 0.5371, 0.3701,  ..., 0.1348, 1.0352, 0.2273]],\n\n         [[1.8623, 0.5024, 0.3445,  ..., 0.1207, 1.0039, 0.1914]],\n\n         [[1.1592, 0.2991, 0.1069,  ..., 0.7871, 0.3357, 0.0943]],\n\n         ...,\n\n         [[0.0617, 0.0311, 0.0511,  ..., 0.0385, 0.0513, 0.0317]],\n\n         [[0.0123, 0.2161, 0.0441,  ..., 0.0416, 0.2788, 0.0482]],\n\n         [[0.0679, 0.1996, 0.1183,  ..., 0.0614, 0.2307, 0.0120]]]],\n       device='cuda:0', dtype=torch.float16, grad_fn=<AbsBackward0>) = <built-in method abs of Tensor object at 0x7f4793a66c00>()
+E        +            where <built-in method abs of Tensor object at 0x7f4793a66c00> = (tensor([[[[ 0.6362, -0.1791, -0.1234,  ..., -0.0449,  0.3452, -0.0757]],\n\n         [[ 0.6201, -0.1675, -0.1147,  ..., -0.0403,  0.3345, -0.0637]],\n\n         [[ 0.3860, -0.0996, -0.0356,  ..., -0.2620,  0.1119, -0.0314]],\n\n         ...,\n\n         [[ 0.0205, -0.0103, -0.0170,  ..., -0.0128, -0.0171, -0.0105]],\n\n         [[-0.0041, -0.0720, -0.0147,  ..., -0.0139,  0.0928, -0.0161]],\n\n         [[ 0.0226, -0.0665, -0.0394,  ..., -0.0205,  0.0768, -0.0040]]]],\n       device='cuda:0', dtype=torch.float16) - tensor([[[[ 2.5449, -0.7163, -0.4934,  ..., -0.1797,  1.3809, -0.3030]],\n\n         [[ 2.4824, -0.6699, -0.4592,  ..., -0.1610,  1.3389, -0.2551]],\n\n         [[ 1.5449, -0.3987, -0.1426,  ..., -1.0488,  0.4475, -0.1257]],\n\n         ...,\n\n         [[ 0.0823, -0.0414, -0.0682,  ..., -0.0514, -0.0684, -0.0422]],\n\n         [[-0.0164, -0.2881, -0.0588,  ..., -0.0555,  0.3716, -0.0643]],\n\n         [[ 0.0906, -0.2661, -0.1577,  ..., -0.0818,  0.3076, -0.0161]]]],\n       device='cuda:0', dtype=torch.float16, grad_fn=<ToCopyBackward0>)).abs
+E        +  and   0.001953125 = <built-in method item of Tensor object at 0x7f4793a66b60>()
+E        +    where <built-in method item of Tensor object at 0x7f4793a66b60> = tensor(0.0020, device='cuda:0', dtype=torch.float16, grad_fn=<MaxBackward1>).item
+E        +      where tensor(0.0020, device='cuda:0', dtype=torch.float16, grad_fn=<MaxBackward1>) = <built-in method max of Tensor object at 0x7f4793a67d30>()
+E        +        where <built-in method max of Tensor object at 0x7f4793a67d30> = tensor([[[[    0.0000,     0.0000,     0.0000,  ...,     0.0000,\n               0.0000,     0.0000]],\n\n         [[    0.0000,     0.0005,     0.0000,  ...,     0.0001,\n               0.0000,     0.0000]],\n\n         [[    0.0000,     0.0002,     0.0000,  ...,     0.0010,\n               0.0002,     0.0001]],\n\n         ...,\n\n         [[    0.0001,     0.0000,     0.0001,  ...,     0.0000,\n               0.0000,     0.0000]],\n\n         [[    0.0000,     0.0002,     0.0001,  ...,     0.0000,\n               0.0000,     0.0000]],\n\n         [[    0.0000,     0.0002,     0.0000,  ...,     0.0001,\n               0.0000,     0.0001]]]], device='cuda:0', dtype=torch.float16,\n       grad_fn=<AbsBackward0>).max
+E        +          where tensor([[[[    0.0000,     0.0000,     0.0000,  ...,     0.0000,\n               0.0000,     0.0000]],\n\n         [[    0.0000,     0.0005,     0.0000,  ...,     0.0001,\n               0.0000,     0.0000]],\n\n         [[    0.0000,     0.0002,     0.0000,  ...,     0.0010,\n               0.0002,     0.0001]],\n\n         ...,\n\n         [[    0.0001,     0.0000,     0.0001,  ...,     0.0000,\n               0.0000,     0.0000]],\n\n         [[    0.0000,     0.0002,     0.0001,  ...,     0.0000,\n               0.0000,     0.0000]],\n\n         [[    0.0000,     0.0002,     0.0000,  ...,     0.0001,\n               0.0000,     0.0001]]]], device='cuda:0', dtype=torch.float16,\n       grad_fn=<AbsBackward0>) = <built-in method abs of Tensor object at 0x7f4793a67dd0>()
+E        +            where <built-in method abs of Tensor object at 0x7f4793a67dd0> = (tensor([[[[ 2.5449, -0.7163, -0.4934,  ..., -0.1797,  1.3809, -0.3030]],\n\n         [[ 2.4824, -0.6704, -0.4592,  ..., -0.1611,  1.3389, -0.2551]],\n\n         [[ 1.5449, -0.3984, -0.1426,  ..., -1.0479,  0.4478, -0.1256]],\n\n         ...,\n\n         [[ 0.0822, -0.0414, -0.0681,  ..., -0.0514, -0.0684, -0.0422]],\n\n         [[-0.0164, -0.2883, -0.0587,  ..., -0.0555,  0.3716, -0.0643]],\n\n         [[ 0.0906, -0.2664, -0.1577,  ..., -0.0819,  0.3076, -0.0161]]]],\n       device='cuda:0', dtype=torch.float16, grad_fn=<ViewBackward0>) - tensor([[[[ 2.5449, -0.7163, -0.4934,  ..., -0.1797,  1.3809, -0.3030]],\n\n         [[ 2.4824, -0.6699, -0.4592,  ..., -0.1610,  1.3389, -0.2551]],\n\n         [[ 1.5449, -0.3987, -0.1426,  ..., -1.0488,  0.4475, -0.1257]],\n\n         ...,\n\n         [[ 0.0823, -0.0414, -0.0682,  ..., -0.0514, -0.0684, -0.0422]],\n\n         [[-0.0164, -0.2881, -0.0588,  ..., -0.0555,  0.3716, -0.0643]],\n\n         [[ 0.0906, -0.2661, -0.1577,  ..., -0.0818,  0.3076, -0.0161]]]],\n       device='cuda:0', dtype=torch.float16, grad_fn=<ToCopyBackward0>)).abs
+
+test.py:762: AssertionError
+=========================== short test summary info ============================
+FAILED test.py::test_flash_attn_output[0.0-0.0-128-128-128-True-False-False-False-mha-dtype0-False]
+============================== 1 failed in 6.09s ===============================
+!!!!!split!!!!  params.num_splits = 4
