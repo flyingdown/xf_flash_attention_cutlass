@@ -1,7 +1,0 @@
-/root/flash-attention/paged_attention/xf_flash_attention_cutlass/build/CMakeFiles/paged-attention.dir
-/root/flash-attention/paged_attention/xf_flash_attention_cutlass/build/CMakeFiles/edit_cache.dir
-/root/flash-attention/paged_attention/xf_flash_attention_cutlass/build/CMakeFiles/rebuild_cache.dir
-/root/flash-attention/paged_attention/xf_flash_attention_cutlass/build/CMakeFiles/list_install_components.dir
-/root/flash-attention/paged_attention/xf_flash_attention_cutlass/build/CMakeFiles/install.dir
-/root/flash-attention/paged_attention/xf_flash_attention_cutlass/build/CMakeFiles/install/local.dir
-/root/flash-attention/paged_attention/xf_flash_attention_cutlass/build/CMakeFiles/install/strip.dir
