@@ -66,6 +66,7 @@ void set_params_fprop_strided(Flash_fwd_params &params,
 
     params.cu_seqlens_q = static_cast<int *>(cu_seqlens_q_d);
     params.cu_seqlens_k = static_cast<int *>(cu_seqlens_k_d);
+    params.seqused_k = static_cast<int *>(seqused_k);
 
     // P = softmax(QK^T)
     params.p_ptr = p_d;
@@ -196,12 +197,12 @@ void run_mha_fwd__(Flash_fwd_params &params, hipStream_t stream, bool force_spli
         HEADDIM_SWITCH(params.d, [&] {
             BOOL_SWITCH(params.is_causal, Is_causal, [&] {
                 // printf("params.num_splits = %d !force_split_kernel = %d\n", params.num_splits, !force_split_kernel);
-                // if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
-                //     run_mha_fwd_<elem_type, kHeadDim, Is_causal>(params, stream);
-                // } else { 
-                    printf("!!!!!split!!!!  params.num_splits = %d\n",  params.num_splits);
+                if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
+                    run_mha_fwd_<elem_type, kHeadDim, Is_causal>(params, stream);
+                } else { 
+                    // printf("!!!!!split!!!!  params.num_splits = %d\n",  params.num_splits);
                     run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim, Is_causal>(params, stream);
-                // }
+                }
             });
         });
     });
@@ -305,12 +306,69 @@ void fmha_fwd(
     params.alibi_slopes_ptr = alibi_slopes_ptr;
     params.alibi_slopes_batch_stride = batch_size > 1 ? num_heads : 0;
 
-    run_mha_fwd__(params, stream);
+    run_mha_fwd__(params, stream, true);
 
     // if (params.num_splits > 1) {
     //   HIP_CHECK(hipFree(softmax_lse_accum_ptr));
     //   HIP_CHECK(hipFree(out_accum_ptr));
     // }
+}
+
+void fmha_varlen_fwd(
+  void* q_ptrs, // total_q x num_heads_q x head_size, total_q := \sum_{i=0}^{b} s_i
+  void* k_ptrs, // total_kv x num_heads_kv x head_size, total_kv := \sum_{i=0}^{b} s_i
+  void* v_ptrs, // total_kv x num_heads_kv x head_size, total_kv := \sum_{i=0}^{b} s_i
+  void* o_ptrs, // total_q x num_heads_q x head_size, total_kv := \sum_{i=0}^{b} s_i
+  void* cu_seqlens_q_ptrs,  // b+1
+  void* cu_seqlens_k_ptrs, // b+1
+  // const int total_q,
+  const int32_t max_seqlen_q, 
+  const int32_t max_seqlen_k, 
+  const int32_t batch_size, 
+  const int32_t num_heads, 
+  const int32_t num_heads_k, 
+  const int32_t head_size, 
+  hipStream_t stream,
+  const float softmax_scale, 
+  // void * softmax_lse_ptr,
+  const bool is_causal,
+  const bool is_fp16,
+  int window_size_left = -1,
+  int window_size_right = -1) {
+
+    auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
+    // const int head_size = round_multiple(head_size_og, 8);
+    const int head_size_rounded = round_multiple(head_size, 32);
+    const int seqlen_q_rounded = round_multiple(max_seqlen_q, 128);
+    const int seqlen_k_rounded = round_multiple(max_seqlen_k, 128);
+    
+    Flash_fwd_params params;
+    set_params_fprop_strided(params,
+                     batch_size,
+                     max_seqlen_q, max_seqlen_k,
+                     seqlen_q_rounded, seqlen_k_rounded,
+                     num_heads, num_heads_k,
+                     head_size, head_size_rounded,
+                     q_ptrs, k_ptrs, v_ptrs, o_ptrs,
+                     cu_seqlens_q_ptrs,
+                     cu_seqlens_k_ptrs,
+                     /*seqused_k.has_value() ? seqused_k.value().data_ptr() :*/ nullptr,
+                     /*return_softmax ? p.data_ptr() :*/ nullptr,
+                     /*softmax_lse.data_ptr()*/nullptr,
+                     /*p_dropout*/0.f,
+                     softmax_scale,
+                     window_size_left,
+                     window_size_right,
+                     /*softcap*/0.f,
+                     !is_fp16,
+                     /*seqlenq_ngroups_swapped*/0,
+                     /*unpadded_lse*/true);
+    // params.total_q = total_q;
+    params.is_seqlens_k_cumulative = true;
+    params.num_splits = 1;
+    // print_params(params);
+    run_mha_fwd__(params, stream, true);
+
 }
 
 void fmha_page_kvcache_fwd(
@@ -411,7 +469,7 @@ void fmha_page_kvcache_fwd(
 
 
 
-    run_mha_fwd__(params, stream);
+    run_mha_fwd__(params, stream, true);
 
     // if (params.num_splits > 1) {
     //   HIP_CHECK(hipFree(softmax_lse_accum_ptr));

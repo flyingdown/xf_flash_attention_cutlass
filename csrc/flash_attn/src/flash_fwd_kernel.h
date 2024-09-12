@@ -1267,7 +1267,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
 
     // sOaccum is larger than sQ, so we need to syncthreads here
     // TODO: allocate enough smem for sOaccum
-    if constexpr (Split) { __syncthreads(); }
+    // if constexpr (Split) { __syncthreads(); }
+    __syncthreads();
 
     cute::copy(smem_tiled_copy_Oaccum, taccOrOaccum, taccOsOaccum);
 

@@ -30,6 +30,28 @@ void fmha_fwd(
   bool is_fp16,
   int num_splits = 0);
 
+void fmha_varlen_fwd(
+  void* q_ptrs, // total_q x num_heads_q x head_size, total_q := \sum_{i=0}^{b} s_i
+  void* k_ptrs, // total_kv x num_heads_kv x head_size, total_kv := \sum_{i=0}^{b} s_i
+  void* v_ptrs, // total_kv x num_heads_kv x head_size, total_kv := \sum_{i=0}^{b} s_i
+  void* o_ptrs, // total_q x num_heads_q x head_size, total_kv := \sum_{i=0}^{b} s_i
+  void* cu_seqlens_q_ptrs,  // b+1
+  void* cu_seqlens_k_ptrs, // b+1
+  // const int total_q,
+  const int32_t max_seqlen_q, 
+  const int32_t max_seqlen_k, 
+  const int32_t batch_size, 
+  const int32_t num_heads, 
+  const int32_t num_heads_k, 
+  const int32_t head_size, 
+  hipStream_t stream,
+  const float softmax_scale, 
+  // void * softmax_lse_ptr,
+  const bool is_causal,
+  const bool is_fp16,
+  int window_size_left = -1,
+  int window_size_right = -1);
+
 void fmha_page_kvcache_fwd(
   void* q_ptr,
   void* kcache_ptr,

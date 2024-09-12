@@ -554,7 +554,6 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
     return {out, q_padded, k_padded, v_padded, out_padded, softmax_lse, p, rng_state};
 }
 
-#if 0
 std::vector<at::Tensor>
 mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \sum_{i=0}^{b} s_i
                const at::Tensor &k,  // total_k x num_heads_k x head_size, total_k := \sum_{i=0}^{b} s_i or num_blocks x page_block_size x num_heads_k x head_size if there's a block_table.
@@ -727,6 +726,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
         if (return_softmax) {p.zero_();}
     }
 
+    #if 0
     Flash_fwd_params params;
     set_params_fprop(params,
                      batch_size,
@@ -762,6 +762,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
                            head_size, max_seqlen_k, max_seqlen_q,
                            head_size_rounded, p_dropout, /*num_splits*/0, dprops, opts);
     }
+    #endif
 
     // if (leftpad_k_.has_value()) {
     //     auto leftpad_k = leftpad_k_.value();
@@ -776,25 +777,29 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
     // number of times random will be generated per thread, to offset philox counter in thc random
     // state
     // We use a custom RNG that increases the offset by batch_size * nheads * 32.
-    int64_t counter_offset = params.b * params.h * 32;
+    // int64_t counter_offset = params.b * params.h * 32;
     auto options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
     auto rng_state = torch::empty({2}, options.dtype(torch::kInt64));
     // Forward kernel will populate memory with the seed and offset.
-    params.rng_state = reinterpret_cast<uint64_t*>(rng_state.data_ptr());
+    // params.rng_state = reinterpret_cast<uint64_t*>(rng_state.data_ptr());
 
-    if (p_dropout > 0.0)  {
-        auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
-            gen_, at::cuda::detail::getDefaultCUDAGenerator());
-        // See Note [Acquire lock when using random generators]
-        std::lock_guard<std::mutex> lock(gen->mutex_);
-        params.philox_args = gen->philox_cuda_state(counter_offset);
-    }
+    // if (p_dropout > 0.0)  {
+    //     auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
+    //         gen_, at::cuda::detail::getDefaultCUDAGenerator());
+    //     // See Note [Acquire lock when using random generators]
+    //     std::lock_guard<std::mutex> lock(gen->mutex_);
+    //     params.philox_args = gen->philox_cuda_state(counter_offset);
+    // }
 
-    set_params_alibi(params, alibi_slopes_, batch_size, num_heads);
+    // set_params_alibi(params, alibi_slopes_, batch_size, num_heads);
 
     if (max_seqlen_k > 0) {
         auto stream = at::hip::getCurrentHIPStreamMasqueradingAsCUDA().stream();
-        run_mha_fwd(params, stream, paged_KV);
+        // run_mha_fwd(params, stream, paged_KV);
+        fmha_varlen_fwd(q_padded.data_ptr(), k_padded.data_ptr(), v_padded.data_ptr(), 
+            out.data_ptr(), cu_seqlens_q_d, cu_seqlens_k.data_ptr(), /*total_q,*/ max_seqlen_q, 
+            max_seqlen_k, batch_size, num_heads, num_heads_k, head_size, stream, softmax_scale, 
+            /*softmax_lse.data_ptr(),*/ is_causal, q_dtype == torch::kFloat16, window_size_left, window_size_right);
     } else {
         // If seqlen_k == 0, then we have an empty tensor. We need to set the output to 0.
         out.zero_();
@@ -819,6 +824,7 @@ mha_varlen_fwd(at::Tensor &q,  // total_q x num_heads x head_size, total_q := \s
     return {out, q_padded, k_padded, v_padded, out_padded, softmax_lse, p, rng_state};
 }
 
+#if 0
 void run_mha_bwd(Flash_bwd_params &params, hipStream_t stream) {
     FP16_SWITCH(!params.is_bf16, [&] {
         HEADDIM_SWITCH(params.d, [&] {
@@ -1538,7 +1544,7 @@ mha_fwd_kvcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
 PYBIND11_MODULE(paged_attn, m) {
     m.doc() = "FlashAttention";
     m.def("fwd", &mha_fwd, "Forward pass");
-    // m.def("varlen_fwd", &mha_varlen_fwd, "Forward pass (variable length)");
+    m.def("varlen_fwd", &mha_varlen_fwd, "Forward pass (variable length)");
     // m.def("bwd", &mha_bwd, "Backward pass");
     // m.def("varlen_bwd", &mha_varlen_bwd, "Backward pass (variable length)");
     m.def("fwd_kvcache", &mha_fwd_kvcache, "Forward pass, with KV-cache");
