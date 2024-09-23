@@ -179,7 +179,9 @@ void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream)
     // printf("kBlockM = %d, kBlockN = %d", kBlockM, kBlockN);
 #ifndef FLASHATTENTION_DISABLE_SPLITKV
     // run_flash_splitkv_fwd<Flash_fwd_kernel_traits<128, kBlockM, kBlockN, 4, false, false, cute::half_t>, Is_causal>(params, stream);
-    run_flash_splitkv_fwd<Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, 4, false, true, T>, Is_causal>(params, stream);
+    run_flash_splitkv_fwd<Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, 4, false, true, T>, Is_causal>(params, stream); //src
+    //run_flash_splitkv_fwd<Flash_fwd_kernel_traits<Headdim, 32, 32, 2, true, true, T>, Is_causal>(params, stream);
+    //run_flash_splitkv_fwd<Flash_kvcache_kernel_traits<Headdim, 32, 32, 2, false, true, T>, Is_causal>(params, stream);
 #endif
 }
 
@@ -281,7 +283,12 @@ void run_mha_fwd_hdim128(Flash_fwd_params &params, cudaStream_t stream) {
         // }
 #if 1
         // printf("run 128\n");
-        run_flash_fwd<Flash_fwd_kernel_traits<Headdim, 64, 32, 4, false, /*Share_Q_K_smem_=*/true, T>, Is_dropout, Is_causal>(params, stream);
+        if (params.seqlen_q <= 4096) {
+            run_flash_fwd<Flash_fwd_kernel_traits<Headdim, 64, 32, 4, false, /*Share_Q_K_smem_=*/true, T>, Is_dropout, Is_causal>(params, stream);
+        }
+        else {
+            run_flash_fwd<Flash_fwd_kernel_traits<Headdim, 128, 32, 4, false, /*Share_Q_K_smem_=*/true, T>, Is_dropout, Is_causal>(params, stream);
+        }
 #endif    
     });
 }

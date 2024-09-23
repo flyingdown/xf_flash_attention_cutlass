@@ -87,8 +87,19 @@ void set_params_fprop_strided(Flash_fwd_params &params,
     params.d_rounded = d_rounded;
 
     // Set the different scale values.
-    params.scale_softmax = softmax_scale;
-    params.scale_softmax_log2 = softmax_scale * M_LOG2E;
+    // params.scale_softmax = softmax_scale;
+    // params.scale_softmax_log2 = softmax_scale * M_LOG2E;
+
+    if (softcap > 0.0) {
+        params.softcap = softmax_scale / softcap;
+        params.scale_softmax = softcap;
+        params.scale_softmax_log2 = softcap * M_LOG2E;
+    } else{
+        // Remove potential NaN
+        params.softcap = 0.0;
+        params.scale_softmax = softmax_scale;
+        params.scale_softmax_log2 = softmax_scale * M_LOG2E;
+    }
 
 
     // Set this to probability of keeping an element to simplify things.
@@ -108,7 +119,10 @@ void set_params_fprop_strided(Flash_fwd_params &params,
     params.window_size_left = window_size_left;
     params.window_size_right = window_size_right;
 
-
+    //add param
+    params.is_seqlens_k_cumulative = true;
+    params.unpadded_lse = unpadded_lse;
+    params.seqlenq_ngroups_swapped = seqlenq_ngroups_swapped;
 }
 
 inline int num_splits_heuristic(int batch_nheads_mblocks, int num_SMs, int num_n_blocks, int max_splits) {
@@ -200,7 +214,7 @@ void run_mha_fwd__(Flash_fwd_params &params, hipStream_t stream, bool force_spli
                 if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
                     run_mha_fwd_<elem_type, kHeadDim, Is_causal>(params, stream);
                 } else { 
-                    // printf("!!!!!split!!!!  params.num_splits = %d\n",  params.num_splits);
+                    //printf("!!!!!split!!!!  params.num_splits = %d\n",  params.num_splits);
                     run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim, Is_causal>(params, stream);
                 }
             });
@@ -211,27 +225,81 @@ void run_mha_fwd__(Flash_fwd_params &params, hipStream_t stream, bool force_spli
 
 void print_params(Flash_fwd_params &params)
 {
-    std::cout << " params.q_head_stride " <<  params.q_head_stride << "\n";
-    std::cout << " params.q_row_stride " << params.q_row_stride << "\n";
-    std::cout << " params.q_batch_stride " << params.q_batch_stride << "\n";
+    std::cout << "c_api params" << std::endl;
 
-    std::cout << "params.k_head_stride " << params.k_head_stride << "\n";
-    std::cout << "params.k_row_stride " << params.k_row_stride << "\n";
-    std::cout << "params.k_batch_stride " << params.k_batch_stride << "\n";
+    // std::cout << " params.q_head_stride " <<  params.q_head_stride << "\n";
+    // std::cout << " params.q_row_stride " << params.q_row_stride << "\n";
+    // std::cout << " params.q_batch_stride " << params.q_batch_stride << "\n";
 
-    std::cout << " params.v_head_stride " << params.v_head_stride << "\n";
-    std::cout << " params.v_row_stride " << params.v_row_stride << "\n";
-    std::cout << " params.v_batch_stride " << params.v_batch_stride << "\n";
+    // std::cout << "params.k_head_stride " << params.k_head_stride << "\n";
+    // std::cout << "params.k_row_stride " << params.k_row_stride << "\n";
+    // std::cout << "params.k_batch_stride " << params.k_batch_stride << "\n";
 
-    std::cout << " params.o_head_stride " << params.o_head_stride << "\n";
-    std::cout << " params.o_row_stride " << params.o_row_stride << "\n";
-    std::cout << " params.o_batch_stride " << params.o_batch_stride << "\n";
+    // std::cout << " params.v_head_stride " << params.v_head_stride << "\n";
+    // std::cout << " params.v_row_stride " << params.v_row_stride << "\n";
+    // std::cout << " params.v_batch_stride " << params.v_batch_stride << "\n";
 
+    // std::cout << " params.o_head_stride " << params.o_head_stride << "\n";
+    // std::cout << " params.o_row_stride " << params.o_row_stride << "\n";
+    // std::cout << " params.o_batch_stride " << params.o_batch_stride << "\n";
 
-    std::cout << " params.block_table_batch_stride " << params.block_table_batch_stride << "\n";
-    std::cout << " params.page_block_size " << params.page_block_size << "\n";
+    // std::cout << "b h " << params.b << " " << params.h << std::endl;
+    // std::cout << "is_causal" << params.is_causal << std::endl;
+    // std::cout << "unpadd seqlenq_group" << params.unpadded_lse << params.seqlenq_ngroups_swapped << std::endl;
 
+    // std::cout << " params.block_table_batch_stride " << params.block_table_batch_stride << "\n";
+    // std::cout << " params.page_block_size " << params.page_block_size << "\n";
 
+    // std::cout << "seqlen_knew: " << params.seqlen_knew << std::endl;
+    // std::cout << "knew_batch_stride: " << params.knew_batch_stride << std::endl;
+    // std::cout << "vnew_batch_stride: " << params.vnew_batch_stride << std::endl;
+    // std::cout << "params.rotary_dim: " << params.rotary_dim << std::endl;
+
+    // std::cout << "page_block_size: " << params.page_block_size << std::endl;
+    // std::cout << "block_table_batch_stride: " << params.block_table_batch_stride << std::endl;
+    // std::cout << "is_seqlens_k_cumulative: " << params.is_seqlens_k_cumulative << std::endl;
+
+    // std::cout << "params.seqlen_q: " << params.seqlen_q  << std::endl; 
+    // std::cout << "params.seqlen_q_rounded: " << params.seqlen_q_rounded  << std::endl; 
+    // std::cout << "params.seqlen_k: " << params.seqlen_k  << std::endl; 
+    // std::cout << "params.seqlen_k_rounded: " << params.seqlen_k_rounded  << std::endl;
+    // std::cout << "params.d_rounded: " << params.d_rounded  << std::endl; 
+    // std::cout << "params.d: " << params.d  << std::endl;
+    // std::cout << "params.h: " << params.h  << std::endl;
+    // std::cout << "params.is_bf16 : " << params.is_bf16  << std::endl;
+    
+    // std::cout << "params.q_ptr : " << params.q_ptr  << std::endl;
+    // std::cout << "params.k_ptr : " << params.k_ptr  << std::endl;
+    // std::cout << "params.v_ptr : " << params.v_ptr  << std::endl;
+    
+    // std::cout << "params.cache_batch_idx : " << params.cache_batch_idx  << std::endl;
+    // std::cout << "params.h_h_k_ratio : " << params.h_h_k_ratio  << std::endl;
+    // std::cout << "params.v_ptr : " << params.v_ptr  << std::endl;
+    // std::cout << "params.rotary_dim : " << params.rotary_dim  << std::endl;
+    
+    // std::cout << "params.scale_softmax : " << params.scale_softmax  << std::endl;
+
+    // std::cout << "params.total_q : " << params.total_q  << std::endl;
+    // std::cout << "params.leftpad_k : " << params.leftpad_k  << std::endl;
+    // std::cout << "params.num_splits : " << params.num_splits  << std::endl;
+    // std::cout << "params.scale_softmax : " << params.scale_softmax  << std::endl;
+    
+    /////////////////////
+    std::cout << "params.softmax_lseaccum_ptr : " << params.softmax_lseaccum_ptr  << std::endl;
+    std::cout << "params.block_table : " << params.block_table  << std::endl;
+    std::cout << "params.d : " << params.d  << std::endl;
+
+    std::cout << "params.is_rotary_interleaved : " << params.is_rotary_interleaved  << std::endl;
+    std::cout << "params.alibi_slopes_ptr : " << params.alibi_slopes_ptr  << std::endl;
+    std::cout << "params.alibi_slopes_batch_stride : " << params.alibi_slopes_batch_stride << std::endl;
+    std::cout << "params.unpadded_lse : " << params.unpadded_lse  << std::endl;
+
+    std::cout << "params.seqlenq_ngroups_swapped : " << params.seqlenq_ngroups_swapped  << std::endl;
+    std::cout << "params.softmax_lse_ptr : " << params.softmax_lse_ptr << std::endl;
+    std::cout << "params.d_rounded: " << params.d_rounded  << std::endl;
+    std::cout << "params.oaccum_ptr: " << params.oaccum_ptr  << std::endl;
+
+    std::cout << std::endl; 
 
 }
 
@@ -372,6 +440,7 @@ void fmha_varlen_fwd(
 }
 
 void fmha_page_kvcache_fwd(
+            //Flash_fwd_params &params_py,
             void* q_ptr,
             void* kcache_ptr,
             void* vcache_ptr,
@@ -402,8 +471,6 @@ void fmha_page_kvcache_fwd(
             bool is_fp16
 ) 
 {
-    // FLASHATTNLIB_BEGIN_FUNC
-
     auto round_multiple = [](int x, int m) { return (x + m - 1) / m * m; };
     const int seqlen_q_rounded = round_multiple(seqlen_q, 128);
     const int seqlen_k_rounded = round_multiple(seqlen_k, 128);
@@ -433,7 +500,7 @@ void fmha_page_kvcache_fwd(
                     window_size_left,
                     window_size_right,
                     softcap,
-                    !is_fp16
+                    !is_fp16 //is_fp16
                     );
                     
     params.k_batch_stride = page_block_size * num_heads_k * head_size;
@@ -450,32 +517,48 @@ void fmha_page_kvcache_fwd(
     params.cache_batch_idx = (int *)cache_batch_idx_ptr;
     params.cu_seqlens_k = (int *)cache_seqlens_k_ptr;
     params.is_seqlens_k_cumulative = !cache_seqlens_k_ptr;
-
-    params.num_splits = 1;
     
-    // hipDeviceProp_t dprops;
-    // hipGetDeviceProperties(&dprops, 0);
-    // void * softmax_lse_accum_ptr = nullptr;
-    // void * out_accum_ptr = nullptr;
-    // set_params_splitkv(params, batch_size, num_heads,
-    //   head_size, seqlen_k, seqlen_q,
-    //   head_size_rounded, 0.f, /*num_splits*/0, &dprops, 
-    //   softmax_lse_accum_ptr, out_accum_ptr);
+    params.num_splits = num_splits;   //2
 
 
-    // printf("aaa\n");
-    // print_params(params);
+    params.rotary_dim = 0;
+    params.alibi_slopes_ptr = nullptr;
+
+    hipDeviceProp_t dprops;
+    hipGetDeviceProperties(&dprops, 0);
+    void * softmax_lse_accum_ptr = nullptr;
+    void * out_accum_ptr = nullptr;
+
+
+    set_params_splitkv(params, batch_size, num_heads,
+      head_size, seqlen_k, seqlen_q,
+      head_size_rounded, 0.f, params.num_splits, &dprops, 
+      softmax_lse_accum_ptr, out_accum_ptr);
+
+
+    //print_params(params);
+
+
+    // void* softmax_lse = nullptr;
+    // HIP_CHECK(hipMalloc(&softmax_lse, seqlen_q * batch_size * num_heads * sizeof(float)));
     // params.softmax_lse_ptr = softmax_lse;
 
+    // params.softmax_lseaccum_ptr
+    // params.softmax_lse_ptr
+    // params.oaccum_ptr = out_accum_ptr;
 
+    // params.softmax_lseaccum_ptr = nullptr;
+    // params.softmax_lse_ptr = nullptr;
 
+    // run kernel 
     run_mha_fwd__(params, stream, true);
 
-    // if (params.num_splits > 1) {
-    //   HIP_CHECK(hipFree(softmax_lse_accum_ptr));
-    //   HIP_CHECK(hipFree(out_accum_ptr));
-    // }
 
+    if (params.num_splits > 1) {
+      HIP_CHECK(hipFree(softmax_lse_accum_ptr));
+    //   HIP_CHECK(hipFree(softmax_lse));
+      HIP_CHECK(hipFree(out_accum_ptr));
+    }
 
 
     // params.k_head_stride = k_head_stride;

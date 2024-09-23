@@ -53,6 +53,7 @@ void fmha_varlen_fwd(
   int window_size_right = -1);
 
 void fmha_page_kvcache_fwd(
+  //Flash_fwd_params &params,
   void* q_ptr,
   void* kcache_ptr,
   void* vcache_ptr,

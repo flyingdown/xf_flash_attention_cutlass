@@ -25,7 +25,6 @@ struct Alibi {
         , max_seqlen_q(max_seqlen_q) {
     };
 
-
     template <typename Engine, typename Layout>
     __forceinline__ __device__ void apply_alibi(Tensor<Engine, Layout> &tensor,
                                       const int col_idx_offset_,
@@ -33,15 +32,18 @@ struct Alibi {
                                       const int warp_row_stride) {
         // tensor has shape (nrow=(2, MMA_M), ncol=(2, MMA_N))
         static_assert(Layout::rank == 2, "Only support 2D Tensor");
-        const int lane_id = threadIdx.x % 32;
-        const int col_idx_offset = col_idx_offset_ + (lane_id % 4) * 2;
+        const int lane_id = threadIdx.x % 64;
+        const int col_idx_offset = col_idx_offset_ + lane_id / 16;
+        const int stride_between_each_repeat = 16;
+        const int stride_between_each_thread = 4;
+
         if constexpr (Is_causal) {  // Simpler, we add the same bias vector to all rows
             #pragma unroll
             for (int nj = 0; nj < size<1, 1>(tensor); ++nj) {
-                const int col_idx_base = col_idx_offset + nj * 8;
+                const int col_idx_base = col_idx_offset + nj * stride_between_each_repeat;
                 #pragma unroll
                 for (int j = 0; j < size<1, 0>(tensor); ++j) {
-                    const int col_idx = col_idx_base + j;
+                    const int col_idx = col_idx_base + j * stride_between_each_thread;
                     #pragma unroll
                     for (int mi = 0; mi < size<0>(tensor); ++mi) {
                         tensor(mi, make_coord(j, nj)) += alibi_slope * col_idx;
@@ -50,25 +52,20 @@ struct Alibi {
             }
         } else {  // Bias depends on both row_idx and col_idx
             #pragma unroll
-            for (int mi = 0; mi < size<0, 1>(tensor); ++mi) {
-                const int row_idx_base = row_idx_offset + mi * warp_row_stride;
+            for (int mi = 0; mi < size<0>(tensor); ++mi) {
+                const int row_idx = row_idx_offset + mi * warp_row_stride;
                 #pragma unroll
-                for (int i = 0; i < size<0, 0>(tensor); ++i) {
-                    const int row_idx = row_idx_base + i * 8;
+                for (int nj = 0; nj < size<1, 1>(tensor); ++nj) {
+                    const int col_idx_base = col_idx_offset + nj * stride_between_each_repeat;
                     #pragma unroll
-                    for (int nj = 0; nj < size<1, 1>(tensor); ++nj) {
-                        const int col_idx_base = col_idx_offset + nj * 8;
-                        #pragma unroll
-                        for (int j = 0; j < size<1, 0>(tensor); ++j) {
-                            const int col_idx = col_idx_base + j;
-                            tensor(make_coord(i, mi), make_coord(j, nj)) -= alibi_slope * abs(row_idx + max_seqlen_k - max_seqlen_q - col_idx);
-                        }
+                    for (int j = 0; j < size<1, 0>(tensor); ++j) {
+                        const int col_idx = col_idx_base + j * stride_between_each_thread;
+                        tensor(mi, make_coord(j, nj)) -= alibi_slope * abs(row_idx + max_seqlen_k - max_seqlen_q - col_idx);
                     }
                 }
             }
         }
     }
-
 };
 
 }  // namespace flash

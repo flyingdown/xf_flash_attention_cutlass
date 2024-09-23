@@ -7,6 +7,6 @@
 #include "flash_bwd_launch_template_hip.h"
 
 template<>
-void run_mha_bwd_<cutlass::half_t, 224>(Flash_bwd_params &params, hipStream_t stream) {
-    run_mha_bwd_hdim224<cutlass::half_t>(params, stream);
+void run_mha_bwd_<cutlass::half_t, 224, false>(Flash_bwd_params &params, hipStream_t stream) {
+    run_mha_bwd_hdim224<cutlass::half_t, false>(params, stream);
 }
