@@ -22,14 +22,6 @@ namespace flash {
 
 using namespace cute;
 
-template <typename Engine, typename Layout>
-__forceinline__ __device__ void apply_softcap(Tensor<Engine, Layout> &tensor, const float softcap){
-    #pragma unroll
-    for (int i = 0; i < size(tensor); ++i) {
-        tensor(i) = cutlass::fast_tanh(tensor(i) * softcap);
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template<typename ElementAccum, typename Params, int kBlockM, bool Is_even_MN>
@@ -375,7 +367,7 @@ inline __device__ void compute_attn_1rowblock(const Params &params, const int bi
             const int row_idx_offset_in_block = (tidx % 16) + wave_id_to_row_block_id * warp_row_stride;
             const int row_idx_offset_ = m_block * kBlockM + row_idx_offset_in_block;
             mask.template apply_mask<Is_causal, Is_even_MN>(
-                acc_s, n_block * kBlockN, row_idx_offset_, warp_row_stride
+                acc_s, n_block * kBlockN, row_idx_offset_, warp_row_stride * kNWarps
             );
         }
 
@@ -469,7 +461,7 @@ inline __device__ void compute_attn_1rowblock(const Params &params, const int bi
             const int row_idx_offset_in_block = (tidx % warp_row_stride) + wave_id_to_row_block_id * warp_row_stride;
             const int row_idx_offset_ = m_block * kBlockM + row_idx_offset_in_block;
             mask.template apply_mask<false>(
-                acc_s, n_block * kBlockN, row_idx_offset_, warp_row_stride
+                acc_s, n_block * kBlockN, row_idx_offset_, warp_row_stride * kNWarps
             );
         }
 
@@ -564,7 +556,7 @@ inline __device__ void compute_attn_1rowblock(const Params &params, const int bi
     if (get<1>(taccOcO(0)) == 0) {
         #pragma unroll
         for (int mi = 0; mi < size(lse); ++mi) {
-            const int row = get<0>(taccOcO(mi));
+            const int row = get<0>(taccOcO(0, mi, 0));
             if (row < binfo.actual_seqlen_q - m_block * kBlockM) { gLSE(row) = lse(mi); }
         }
     }
@@ -640,8 +632,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         Tensor gOaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementO *>(Split ? params.oaccum_ptr : params.o_ptr) + (Split ? row_offset_oaccum : row_offset_o)),
                                       Shape<Int<kBlockM>, Int<kHeadDim>>{},
                                      make_stride(Split ? kHeadDim : params.o_row_stride, _1{}));
-        Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(Split ? params.softmax_lseaccum_ptr : params.softmax_lse_ptr) + row_offset_lseaccum),
-                                      Shape<Int<kBlockM>>{}, Stride<_1>{});
+        // Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(Split ? params.softmax_lseaccum_ptr : params.softmax_lse_ptr) + row_offset_lseaccum),
+        //                               Shape<Int<kBlockM>>{}, Stride<_1>{});
 
         GmemTiledCopyO gmem_tiled_copy_Oaccum;
         auto gmem_thr_copy_Oaccum = gmem_tiled_copy_Oaccum.get_thread_slice(tidx);
@@ -661,11 +653,11 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
         flash::copy<Is_even_MN, Is_even_K, /*Clear_OOB_MN=*/false, /*Clear_OOB_K=*/false>(
             gmem_tiled_copy_Oaccum, tOrOaccum, tOgOaccum, tOcO, tOpO, binfo.actual_seqlen_q - m_block * kBlockM
         );
-        #pragma unroll
-        for (int m = 0; m < size<1>(tOgOaccum); ++m) {
-            const int row = get<0>(tOcO(0, m, 0));
-            if (row < binfo.actual_seqlen_q - m_block * kBlockM && get<1>(tOcO(0, m, 0)) == 0) { gLSEaccum(row) = Split ? -INFINITY : INFINITY; }
-        }
+        // #pragma unroll
+        // for (int m = 0; m < size<1>(tOgOaccum); ++m) {
+        //     const int row = get<0>(tOcO(0, m, 0));
+        //     if (row < binfo.actual_seqlen_q - m_block * kBlockM && get<1>(tOcO(0, m, 0)) == 0) { gLSEaccum(row) = Split ? -INFINITY : INFINITY; }
+        // }
         return;
     }
 
@@ -1075,7 +1067,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
             const int row_idx_offset_ = m_block * kBlockM + 
                 row_idx_offset_in_block;
             mask.template apply_mask<Is_causal, Is_even_MN>(
-                acc_s, n_block * kBlockN, row_idx_offset_, warp_row_stride
+                acc_s, n_block * kBlockN, row_idx_offset_, warp_row_stride * kNWarps
             );
         }
 
@@ -1163,7 +1155,7 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
             const int row_idx_offset_ = m_block * kBlockM + 
                 row_idx_offset_in_block;
             mask.template apply_mask<false>(
-                acc_s, n_block * kBlockN, row_idx_offset_, warp_row_stride
+                acc_s, n_block * kBlockN, row_idx_offset_, warp_row_stride * kNWarps
             );
         }
 
@@ -1283,8 +1275,8 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     Tensor gOaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementO *>(Split ? params.oaccum_ptr : params.o_ptr) + (Split ? row_offset_oaccum : row_offset_o)),
                                  Shape<Int<kBlockM>, Int<kHeadDim>>{},
                                  make_stride(Split ? kHeadDim : params.o_row_stride, _1{}));
-    Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(Split ? params.softmax_lseaccum_ptr : params.softmax_lse_ptr) + row_offset_lseaccum),
-                                   Shape<Int<kBlockM>>{}, Stride<_1>{});
+    // Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(Split ? params.softmax_lseaccum_ptr : params.softmax_lse_ptr) + row_offset_lseaccum),
+    //                                Shape<Int<kBlockM>>{}, Stride<_1>{});
 
 
     GmemTiledCopyO gmem_tiled_copy_Oaccum;
@@ -1301,13 +1293,13 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     Tensor taccOcO = thr_mma.partition_C(caccO);                           // (MMA,MMA_M,MMA_K)
     static_assert(decltype(size<0>(taccOcO))::value == 4);
 
-    if (get<1>(taccOcO(0)) == 0) {
-        #pragma unroll
-        for (int mi = 0; mi < size(lse); ++mi) {
-            const int row = get<0>(taccOcO(mi));
-            if (row < binfo.actual_seqlen_q - m_block * kBlockM) { gLSEaccum(row) = lse(mi); }
-        }
-    }
+    // if (get<1>(taccOcO(0)) == 0) {
+    //     #pragma unroll
+    //     for (int mi = 0; mi < size(lse); ++mi) {
+    //         const int row = get<0>(taccOcO(0, mi, 0));
+    //         if (row < binfo.actual_seqlen_q - m_block * kBlockM) { gLSEaccum(row) = lse(mi); }
+    //     }
+    // }
 
     // Construct identity layout for sO
     Tensor cO = make_identity_tensor(make_shape(size<0>(sOaccum), size<1>(sOaccum)));    // (BLK_M,BLK_K) -> (blk_m,blk_k)
@@ -1378,7 +1370,7 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
 
     static_assert(kMaxSplits <= 128, "kMaxSplits must be <= 128");
     static_assert(kBlockM == 4 || kBlockM == 8 || kBlockM == 16 || kBlockM == 32, "kBlockM must be 4, 8, 16 or 32");
-    static_assert(kNThreads == 256, "We assume that each block has 128 threads");
+    //static_assert(kNThreads == 256, "We assume that each block has 128 threads");
 
     // Shared memory.
     // kBlockM + 1 instead of kBlockM to reduce bank conflicts.
@@ -1391,9 +1383,9 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     const index_t lse_size = params.b * params.h * params.seqlen_q;
 
     const index_t row_offset_lse = bidx * kBlockM;
-    Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lseaccum_ptr) + row_offset_lse),
-                                   Shape<Int<kMaxSplits>, Int<kBlockM>>{},
-                                   make_stride(lse_size, _1{}));
+    // Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lseaccum_ptr) + row_offset_lse),
+    //                                Shape<Int<kMaxSplits>, Int<kBlockM>>{},
+    //                                make_stride(lse_size, _1{}));
     // if (cute::thread0())
     // {
     //     print("gLSEaccum:");
@@ -1403,8 +1395,8 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
 
     // LSE format is different depending on params.unpadded_lse and params.seqlenq_ngroups_swapped, see comment in get_lse_tile.
     // This tensor's layout maps row_offset_lse to {bidb, bidh, q_offset}.
-    Tensor gLSE = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr) + row_offset_lse),
-                              Shape<Int<kBlockM>>{}, Stride<_1>{});
+    // Tensor gLSE = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr) + row_offset_lse),
+    //                           Shape<Int<kBlockM>>{}, Stride<_1>{});
 
     // This layout maps row_offset_lse to {bidh, q_offset, bidb} or {bidh, bidb, q_offset}.
     Layout flat_layout = make_layout(lse_size);
@@ -1413,7 +1405,7 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     Layout remapped_layout = make_layout(make_shape(params.seqlen_q, params.h, params.b), transposed_stride);
     Layout final_layout = cute::composition(remapped_layout, cute::composition(orig_layout, flat_layout));
 
-    Tensor gLSE_unpadded = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr)), final_layout);
+    // Tensor gLSE_unpadded = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr)), final_layout);
     // 1
     constexpr int kNLsePerThread = (kMaxSplits * kBlockM + kNThreads - 1) / kNThreads;
 
@@ -1423,16 +1415,17 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     // }
     // 8
     // Read the LSE values from gmem and store them in shared memory, then transpose them.
-    constexpr int kRowsPerLoadLSE = kNThreads / kBlockM; 
-    #pragma unroll
-    for (int l = 0; l < kNLsePerThread; ++l) {
-        const int row = l * kRowsPerLoadLSE + tidx / kBlockM;
-        const int col = tidx % kBlockM;
-        ElementAccum lse = (row < params.num_splits && col < lse_size - bidx * kBlockM) ? gLSEaccum(row, col) : -INFINITY;
-        __syncthreads();
-        if (row < kMaxSplits) { sLSE[row][col] = lse; }
-        // if (bidx == 0 && tidx < 64) { printf("tidx = %d, row = %d, col = %d, lse = %f\n", tidx, row, col, lse); }
-    }
+    // constexpr int kRowsPerLoadLSE = kNThreads / kBlockM; 
+    // #pragma unroll
+    // for (int l = 0; l < kNLsePerThread; ++l) {
+    //     const int row = l * kRowsPerLoadLSE + tidx / kBlockM;
+    //     const int col = tidx % kBlockM;
+    //     ElementAccum lse = (row < params.num_splits && col < lse_size - bidx * kBlockM) ? gLSEaccum(row, col) : -INFINITY;
+    //     __syncthreads();
+    //     if (row < kMaxSplits) { sLSE[row][col] = lse; }
+    //     // if (bidx == 0 && tidx < 64) { printf("tidx = %d, row = %d, col = %d, lse = %f\n", tidx, row, col, lse); }
+    // }
+
     // if (bidx == 1 && tidx < 32) { printf("tidx = %d, row_offset_lse = %d, lse = %f\n", tidx, row_offset_lse, lse_accum(0)); }
     __syncthreads();
 
@@ -1474,19 +1467,21 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     // lse_logsum is log(0.0) = -INFINITY and we get NaN when we do lse_accum(l) - lse_logsum.
     ElementAccum lse_logsum = (lse_sum == 0.f || lse_sum != lse_sum) ? INFINITY : logf(lse_sum) + lse_max;
     // if (bidx == 0 && tidx < 32) { printf("tidx = %d, lse = %f, lse_max = %f, lse_logsum = %f\n", tidx, lse_accum(0), lse_max, lse_logsum); }
-    if (tidx % kRowsPerLoadTranspose == 0 && tidx / kRowsPerLoadTranspose < kBlockM) {
-        if (params.unpadded_lse) {
-            const index_t lse_offset = row_offset_lse + tidx / kRowsPerLoadTranspose;
-            if (lse_offset < lse_size) {
-                gLSE_unpadded(lse_offset) = lse_logsum;
-            }
-        } else {
-            gLSE(tidx / kRowsPerLoadTranspose) = lse_logsum;
-        }
-        // gLSE(tidx / kRowsPerLoadTranspose) = lse_logsum;
-        // const index_t lse_offset = row_offset_lse + tidx / kRowsPerLoadTranspose;
-        // printf("tidx = %d params.unpadded_lse = %d gLSE(tidx / kRowsPerLoadTranspose)  = %p  \n", tidx, params.unpadded_lse, (uint64_t)(&gLSE(tidx / kRowsPerLoadTranspose)));
-    }
+    
+    // if (tidx % kRowsPerLoadTranspose == 0 && tidx / kRowsPerLoadTranspose < kBlockM) {
+    //     if (params.unpadded_lse) {
+    //         const index_t lse_offset = row_offset_lse + tidx / kRowsPerLoadTranspose;
+    //         if (lse_offset < lse_size) {
+    //             gLSE_unpadded(lse_offset) = lse_logsum;
+    //         }
+    //     } else {
+    //         gLSE(tidx / kRowsPerLoadTranspose) = lse_logsum;
+    //     }
+    //     // gLSE(tidx / kRowsPerLoadTranspose) = lse_logsum;
+    //     // const index_t lse_offset = row_offset_lse + tidx / kRowsPerLoadTranspose;
+    //     // printf("tidx = %d params.unpadded_lse = %d gLSE(tidx / kRowsPerLoadTranspose)  = %p  \n", tidx, params.unpadded_lse, (uint64_t)(&gLSE(tidx / kRowsPerLoadTranspose)));
+    // }
+
     // Store the scales exp(lse - lse_logsum) in shared memory.
     #pragma unroll
     for (int l = 0; l < kNLsePerThread; ++l) {
@@ -1572,48 +1567,7 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
         }
         tOgOaccum.data() = tOgOaccum.data() + params.b * params.h * params.seqlen_q * params.d_rounded;
     }
-    // for (int split = 0; split < params.num_splits; ++split) {
-    //     flash::copy</*Is_even_MN=*/false, Is_even_K>(
-    //         gmem_tiled_copy_Oaccum, tOgOaccum, tOrOaccum, tOcOaccum, tOpOaccum, params.b * params.h * params.seqlen_q - bidx * kBlockM
-    //     );
-    //     __syncthreads();
-    //     #pragma unroll
-    //     for (int m = 0; m < size<1>(tOrOaccum); ++m) {
-    //         int row = get<0>(tOcOaccum(0, m, 0));
-    //         ElementAccum lse_scale = sLSE[split][row];
-    //         if (lse_scale != 0.5)
-    //         {
-    //             printf("error lse_scale\n");
-    //         }
-    //         #pragma unroll
-    //         for (int k = 0; k < size<2>(tOrOaccum); ++k) {
-    //             #pragma unroll
-    //             for (int i = 0; i < size<0>(tOrOaccum); ++i) {
-    //                 auto temp = tOrO(i, m, k);
-    //                 tOrO(i, m, k) += lse_scale * tOrOaccum(i, m, k);
-
-    //                 // if (split == 1) {
-    //                 //     if (cute::abs(tOrO(i, m, k) - tOrOaccum(i, m, k)) > 1e-3)
-    //                 //     {
-    //                 //         printf("bidx = %d error temp = %f lse_scale * tOrOaccum(i, m, k) = %f tOrOaccum(i, m, k) = %f tOrO(i, m, k) = %f lse_scale = %f\n",bidx * kBlockM, float(temp), lse_scale * tOrOaccum(i, m, k), float(tOrOaccum(i, m, k)), float(tOrO(i, m, k)), lse_scale);
-    //                 //     }
-    //                 // }
-    //                 // if (bidx == 2 && tidx == 0)
-    //                 // {
-    //                 //     printf("split = %d %d %d %d tOrOaccum(i, m, k) = %f tOrO(i, m, k) = %f lse_scale = %f\n", split, i, m, k, float(tOrOaccum(i, m, k)), float(tOrO(i, m, k)), lse_scale);
-    //                 // }
-    //             }
-
-    //         }
-    //         // if (cute::thread0()) { printf("lse_scale = %f, %f\n", sLSE[split][0], sLSE[split][1]);}
-    //     }
-    //     tOgOaccum.data() = tOgOaccum.data() + params.b * params.h * params.seqlen_q * params.d_rounded;
-    // }
-    // if (cute::thread0()) { print_tensor(tOrO); }
     
-    // Tensor mO = make_tensor(make_gmem_ptr(reinterpret_cast<Element*>(params.o_ptr) + 
-    // ));
-    // __syncthreads();
     Tensor rO = flash::convert_type<Element>(tOrO);
     // if (bidx * kBlockM == 64 || bidx * kBlockM == 0)
     // {

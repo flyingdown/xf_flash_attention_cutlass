@@ -4,17 +4,16 @@
 
 #pragma once
 
-// #include <cuda.h>
-#include <hip/hip_runtime.h>
+#include <cuda.h>
 #include <vector>
 
-// #ifdef OLD_GENERATOR_PATH
-// #include <ATen/CUDAGeneratorImpl.h>
-// #else
-// #include <ATen/cuda/CUDAGeneratorImpl.h>
-// #endif
+#ifdef OLD_GENERATOR_PATH
+#include <ATen/CUDAGeneratorImpl.h>
+#else
+#include <ATen/cuda/CUDAGeneratorImpl.h>
+#endif
 
-// #include <ATen/cuda/CUDAGraphsUtils.cuh> // For at::cuda::philox::unpack
+#include <ATen/cuda/CUDAGraphsUtils.cuh> // For at::cuda::philox::unpack
 
 constexpr int TOTAL_DIM = 0;
 constexpr int H_DIM = 1;
@@ -123,7 +122,7 @@ struct Flash_fwd_params : public Qkv_params {
     float softcap;
 
     // Random state.
-    // at::PhiloxCudaState philox_args;
+    at::PhiloxCudaState philox_args;
 
     // Pointer to the RNG seed (idx 0) and offset (idx 1).
     uint64_t * rng_state;
@@ -193,4 +192,4 @@ struct Flash_bwd_params : public Flash_fwd_params {
 template<typename T, int Headdim, bool Is_causal> void run_mha_fwd_(Flash_fwd_params &params, cudaStream_t stream);
 template<typename T, int Headdim, bool Is_causal> void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream);
 
-template<typename T, int Headdim> void run_mha_bwd_(Flash_bwd_params &params, cudaStream_t stream);
+template<typename T, int Headdim, bool Is_causal> void run_mha_bwd_(Flash_bwd_params &params, cudaStream_t stream);
